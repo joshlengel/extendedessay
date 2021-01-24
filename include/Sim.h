@@ -48,16 +48,12 @@ struct Time
     double Minutes() const;
     double Hours() const;
     double Days() const;
-    double Years() const;
-    double J2000() const;
 
     static Time FromSeconds(double seconds);
     static Time FromMinutes(double minutes);
     static Time FromHours(double hours);
     static Time FromDays(double days);
-    static Time FromYears(double years);
-
-    static Time FromDate(int32_t year, uint32_t month, uint32_t day, uint32_t hour, uint32_t minute, uint32_t second = 0);
+    static Time FromStr(const std::string &date);
 
     Time operator+(const Time &t) const;
     Time operator-(const Time &t) const;
@@ -71,9 +67,9 @@ struct Time
     bool operator==(const Time &t) const;
 
 private:
-    Time(double j2000);
+    Time(double seconds);
 
-    double m_j2000;
+    double m_seconds;
 };
 
 // Struct representing a physical body (Not necessarily a rigid)
@@ -103,44 +99,49 @@ struct Entity
 // Entity which has already been numerically integrated
 struct StaticEntity : Entity
 {
-    StaticEntity(const std::string &data_path, const std::string &csv_path);
+    StaticEntity(const std::string &target, const std::string &observer);
+    void Init(Time t);
 
-    const Vec &GetPosition(Time t) const;
-    const Vec &GetVelocity(Time t) const;
+    Vec GetPosition(Time t) const;
+    Vec GetVelocity(Time t) const;
 
     void Step(double dt) override;
 
 private:
-    struct State
-    {
-        Vec position;
-        Vec velocity;
-    };
+    std::string m_target;
+    std::string m_observer;
 
-    Time m_prev_time;
-    Time m_time_step;
-    Time m_first_time;
-    Time m_last_time;
-    Time m_elapsed_time;
-    uint32_t m_index;
+    inline static const std::string FRAME = "J2000";
+    inline static const std::string CORRECTION = "NONE";
 
-    std::vector<State> m_states;
+    Time m_elapsed;
 
-    static void ParseLine(const std::string &line, double &jdtdb_time, Vec &position, Vec &velocity);
+    void GetState(Vec &position, Vec &velocity, Time t) const;
 };
 
-struct SolarSystem
+// Used for executing statements before planets initialize
+struct SolarSystem_Base { protected: SolarSystem_Base(const std::string &kernel_path); };
+
+struct SolarSystem : public SolarSystem_Base
 {
-    Entity *sun;
-    Entity *mercury;
-    Entity *venus;
-    Entity *earth;
-    Entity *moon;
-    Entity *mars;
-    Entity *jupyter;
-    Entity *saturn;
-    Entity *uranus;
-    Entity *neptune;
+    StaticEntity sun;
+    StaticEntity mercury;
+    StaticEntity venus;
+    StaticEntity earth;
+    StaticEntity moon;
+    StaticEntity mars;
+    StaticEntity jupyter;
+    StaticEntity saturn;
+    StaticEntity uranus;
+    StaticEntity neptune;
+
+    SolarSystem(const std::string &kernel_path);
+    ~SolarSystem();
+
+    void Init(Time t);
+
+private:
+    std::string m_kernel_path;
 };
 
 struct Simulation
@@ -158,8 +159,6 @@ struct Simulation
     std::map<Time, LaunchPhase> launch_phases;
 
     Time elapsed_time;
-
-    Simulation();
 
     void Step(Time dt);
 };

@@ -4,10 +4,11 @@
 #include"Constants.h"
 
 #include<cmath>
-#include<iostream>
 
-static double C2(double psi, double sqrt_psi) { return (1 - cos(sqrt_psi)) / psi; }
-static double C3(double psi, double sqrt_psi) { return (sqrt_psi - sin(sqrt_psi)) / (sqrt_psi * psi); }
+static double C2(double psi, double sqrt_psi) { return psi < 0? (1 - cosh(sqrt_psi)) / psi : (1 - cos(sqrt_psi)) / psi; }
+static double C3(double psi, double sqrt_psi) { return psi < 0? (sinh(sqrt_psi) - sqrt_psi) / (sqrt_psi * psi) : (sqrt_psi - sin(sqrt_psi)) / (sqrt_psi * psi); }
+
+static double abs(double d) { return d < 0? -d : d; }
 
 // Use universal variables solution to lambert's problem for keplerian orbit
 bool lambert_uni_variables(const Vec &r1, const Vec &r2, double dt, double mu, double tol, uint32_t M, Vec &v0, Vec &vf)
@@ -62,7 +63,7 @@ bool lambert_uni_variables(const Vec &r1, const Vec &r2, double dt, double mu, d
             psi_u = psi;
         
         psi = (psi_l + psi_u) * 0.5;
-        double sqrt_psi = sqrt(psi);
+        double sqrt_psi = sqrt(abs(psi));
         c2 = C2(psi, sqrt_psi);
         c3 = C3(psi, sqrt_psi);
     }
@@ -72,18 +73,17 @@ bool lambert_uni_variables(const Vec &r1, const Vec &r2, double dt, double mu, d
 
 void LaunchData::Compute(SolarSystem *solar_system)
 {
-    StaticEntity *earth = dynamic_cast<StaticEntity*>(solar_system->earth);
-    StaticEntity *mars  = dynamic_cast<StaticEntity*>(solar_system->mars);
-
     Vec v0, vf;
-    if (lambert_uni_variables(earth->GetPosition(time_inject), mars->GetPosition(time_exit), (time_exit - time_inject).Seconds(), Constants::G * solar_system->sun->mass, 1e-4, 200, v0, vf))
+    if (lambert_uni_variables(solar_system->earth.GetPosition(time_inject), solar_system->mars.GetPosition(time_exit), (time_exit - time_inject).Seconds(), Constants::G * solar_system->sun.mass, 1e-4, 200, v0, vf))
     {
-        double v_inf_squared = (v0 - earth->GetVelocity(time_inject)).LengthSquared();
-        double v_or_squared = Constants::G * earth->mass / Rleo;
+        double v_inf_squared = (v0 - solar_system->earth.GetVelocity(time_inject)).LengthSquared();
+        dv_1 = v_inf_squared;
+
+       /* double v_or_squared = Constants::G * earth->mass / Rleo;
         double v_esc_squared = 2.0 * v_or_squared;
 
         double v_req = sqrt(v_esc_squared + v_inf_squared);
 
-        dv_1 = v_req - sqrt(v_or_squared);
+        dv_1 = v_req - sqrt(v_or_squared);*/
     }
 }

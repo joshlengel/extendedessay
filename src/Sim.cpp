@@ -3,9 +3,8 @@
 #include"Constants.h"
 
 #include<cmath>
-#include<regex>
-#include<sstream>
-#include<algorithm>
+
+#include<SpiceUsr.h>
 
 // -------------------------- Vec -----------------------------
 Vec::Vec():
@@ -37,45 +36,32 @@ double Vec::Dot(const Vec &v1, const Vec &v2) { return v1.x*v2.x + v1.y*v2.y + v
 std::ostream &operator<<(std::ostream &os, const Vec &v) { return os << '(' << v.x << ", " << v.y << ", " << v.z << ')'; }
 
 // ------------------------- Time ----------------------------
-Time::Time(): m_j2000(0.0) {}
-Time::Time(double j2000): m_j2000(j2000) {}
+Time::Time(): m_seconds(0.0) {}
+Time::Time(double seconds): m_seconds(seconds) {}
 
-double Time::Seconds() const { return m_j2000 * 86400.0; }
-double Time::Minutes() const { return m_j2000 * 1440.0; }
-double Time::Hours()   const { return m_j2000 * 24.0; }
-double Time::Days()    const { return m_j2000; }
-double Time::Years()   const { return m_j2000 / 365.2422; }
+double Time::Seconds() const { return m_seconds; }
+double Time::Minutes() const { return m_seconds / 60.0; }
+double Time::Hours()   const { return m_seconds / 3600.0; }
+double Time::Days()    const { return m_seconds / 86400.0; }
 
-Time Time::FromSeconds(double seconds) { return seconds / 86400.0; }
-Time Time::FromMinutes(double minutes) { return minutes / 1440.0; }
-Time Time::FromHours(double hours)     { return hours / 24.0; }
-Time Time::FromDays(double days)       { return days; }
-Time Time::FromYears(double years)     { return years / 365.2422; }
+Time Time::FromSeconds(double seconds) { return seconds; }
+Time Time::FromMinutes(double minutes) { return minutes * 60.0; }
+Time Time::FromHours(double hours)     { return hours * 3600.0; }
+Time Time::FromDays(double days)       { return days * 86400.0; }
 
-Time Time::FromDate(int32_t year, uint32_t month, uint32_t day, uint32_t hour, uint32_t minute, uint32_t second)
-{
-    if (month < 3)
-    {
-        --year;
-        month += 12;
-    }
+// str2et_c conveniently returns J2000 date in seconds
+Time Time::FromStr(const std::string &date) { double t; str2et_c(date.c_str(), &t); return t; }
 
-    int32_t A = static_cast<int32_t>(year / 100.0);
-    int32_t B = 2 - A + static_cast<int32_t>(A / 4.0);
-    
-    return Time(365.25 * (year + 4716) + 30.6001 * (month + 1) + day + B - 1524.5);
-}
+Time Time::operator+(const Time &t) const { return m_seconds + t.m_seconds; }
+Time Time::operator-(const Time &t) const { return m_seconds - t.m_seconds; }
+Time &Time::operator+=(const Time &t)     { return *this = m_seconds + t.m_seconds; }
+Time &Time::operator-=(const Time &t)     { return *this = m_seconds - t.m_seconds; }
 
-Time Time::operator+(const Time &t) const { return m_j2000 + t.m_j2000; }
-Time Time::operator-(const Time &t) const { return m_j2000 - t.m_j2000; }
-Time &Time::operator+=(const Time &t)     { return *this = m_j2000 + t.m_j2000; }
-Time &Time::operator-=(const Time &t)     { return *this = m_j2000 - t.m_j2000; }
-
-bool Time::operator>(const Time &t)  const { return m_j2000 > t.m_j2000; }
-bool Time::operator<(const Time &t)  const { return m_j2000 < t.m_j2000; }
-bool Time::operator>=(const Time &t) const { return m_j2000 >= t.m_j2000; }
-bool Time::operator<=(const Time &t) const { return m_j2000 <= t.m_j2000; }
-bool Time::operator==(const Time &t) const { return m_j2000 == t.m_j2000; }
+bool Time::operator>(const Time &t)  const { return m_seconds > t.m_seconds; }
+bool Time::operator<(const Time &t)  const { return m_seconds < t.m_seconds; }
+bool Time::operator>=(const Time &t) const { return m_seconds >= t.m_seconds; }
+bool Time::operator<=(const Time &t) const { return m_seconds <= t.m_seconds; }
+bool Time::operator==(const Time &t) const { return m_seconds == t.m_seconds; }
 
 // --------------------------- Entity --------------------------
 Entity::Entity(const Vec &position, const Vec &velocity, double mass):
@@ -108,171 +94,94 @@ void Entity::Step(double dt)
 }
 
 // --------------------- StaticEntity -------------------------
-StaticEntity::StaticEntity(const std::string &data_path, const std::string &csv_path):
+StaticEntity::StaticEntity(const std::string &target, const std::string &observer):
     Entity(Vec(), Vec(), 0.0),
-    m_prev_time(),
-    m_time_step(),
-    m_first_time(),
-    m_last_time(),
-    m_elapsed_time(),
-    m_index(0),
-    m_states()
+    m_target(target),
+    m_observer(observer),
+    m_elapsed()
 {
     do_gravity = false;
 
-    std::ifstream in(csv_path);
-    if (!in)
-    {
-        std::stringstream err_msg;
-        err_msg << "Error finding csv file '" << csv_path << "'";
-        throw std::runtime_error(err_msg.str());
-    }
-
-    // Parse necessary data:
-    std::ifstream data(data_path);
-
-    if (!data)
-    {
-        std::stringstream err_msg;
-        err_msg << "Error finding data file '" << data_path << "'";
-        throw std::runtime_error(err_msg.str());
-    }
-
-    std::regex gm_str("GM.*?=\\s*([0-9\\.]*?)\\s*"); // Find GM data in csv file (This may vary so the regex expression could be wrong)
-    std::smatch gm_match;
-
-    std::string line;
-    while (std::getline(data, line))
-    {
-        if (std::regex_search(line.cbegin(), line.cend(), gm_match, gm_str))
-        {
-            double gm = std::strtod(gm_match[1].first.base(), nullptr);
-            mass = gm / Constants::G * 1e9; // gm has units of km^3 / s^2, but we need m^3 / s^2
-        }
-    }
-
-    data.close();
-
-    // Start and end keys
-    std::regex start_ephemerides("^\\$\\$SOE");
-    std::regex end_ephemerides("^\\$\\$EOE");
-    
-    while (std::getline(in, line))
-    {
-        if (std::regex_match(line, start_ephemerides))
-        {
-            break;
-        }
-    }
-
-    bool check_first_time = true;
-    bool check_timestep = true;
-
-    double jdtdb_time;
-    State state;
-
-    while (std::getline(in, line))
-    {
-        if (std::regex_match(line, end_ephemerides))
-        {
-            m_last_time = Time::FromDays(jdtdb_time);
-            break;
-        }
-
-        ParseLine(line, jdtdb_time, state.position, state.velocity);
-
-        if (check_timestep && !check_first_time)
-        {
-            check_timestep = false;
-            m_time_step = Time::FromDays(jdtdb_time) - m_first_time;
-        }
-
-        if (check_first_time)
-        {
-            check_first_time = false;
-            m_first_time = Time::FromDays(jdtdb_time);
-        }
-
-        m_states.push_back(state);
-    }
-
-    const State &initial = m_states[0];
-    position = initial.position;
-    velocity = initial.velocity;
+    int dim = 1;
+    double gm;
+    bodvrd_c(target.c_str(), "GM", 1, &dim, &gm);
+    mass = gm / Constants::G;
 }
 
-const Vec &StaticEntity::GetPosition(Time t) const
+void StaticEntity::Init(Time t)
 {
-    return m_states[static_cast<uint32_t>(std::clamp((t - m_first_time).Days(), 0.0, m_last_time.Days()) / m_time_step.Days())].position;
+    m_elapsed = t;
+    GetState(position, velocity, t);
 }
 
-const Vec &StaticEntity::GetVelocity(Time t) const
+Vec StaticEntity::GetPosition(Time t) const
 {
-    return m_states[static_cast<uint32_t>(std::clamp((t - m_first_time).Days(), 0.0, m_last_time.Days()) / m_time_step.Days())].velocity;
+    Vec position, velocity;
+    GetState(position, velocity, t);
+    return position;
+}
+
+Vec StaticEntity::GetVelocity(Time t) const
+{
+    Vec position, velocity;
+    GetState(position, velocity, t);
+    return velocity;
 }
 
 void StaticEntity::Step(double dt)
 {
-    m_elapsed_time += Time::FromSeconds(dt);
-    Time next_time = m_prev_time + m_time_step;
-
-    if (m_elapsed_time > next_time && m_elapsed_time < m_last_time)
-    {
-        m_prev_time = next_time;
-        next_time += m_time_step;
-        ++m_index;
-    }   
-
-    const State &s1 = m_states[m_index    ];
-    const State &s2 = m_states[m_index + 1];
-
-    double w = (m_elapsed_time - m_prev_time).Days() / (next_time - m_prev_time).Days();
-
-    position = (s2.position - s1.position) * w + s1.position;
-    velocity = (s2.velocity - s1.velocity) * w + s1.velocity;
+    GetState(position, velocity, m_elapsed += Time::FromSeconds(dt));
 }
 
-void StaticEntity::ParseLine(const std::string &line, double &jdtdb_time, Vec &position, Vec &velocity)
+void StaticEntity::GetState(Vec &position, Vec &velocity, Time t) const
 {
-    auto itr = line.begin();
+    double state[6];
+    double lt;
+    // Retrieve ephemeris from NASA database
+    spkezr_c(m_target.c_str(), t.Seconds(), FRAME.c_str(), CORRECTION.c_str(), m_observer.c_str(), state, &lt);
 
-    auto NextValue = [&itr](const std::string &line)
-    {
-        while (itr != line.end() && *itr != ',')
-        {
-            ++itr;
-        }
-
-        if (itr == line.end() || ++itr == line.end()) return false;
-
-        ++itr; // jump comma and following space
-        return true;
-    };
-
-    uint32_t index = 0;
-    std::string::const_iterator values[8];
-
-    do
-    {
-        values[index++] = itr;
-    }
-    while (NextValue(line));
-    
-    jdtdb_time = std::strtod(values[0].base(), nullptr);
-    position.x = std::strtod(values[2].base(), nullptr) * 1000;
-    position.y = std::strtod(values[3].base(), nullptr) * 1000;
-    position.z = std::strtod(values[4].base(), nullptr) * 1000;
-    velocity.x = std::strtod(values[5].base(), nullptr) * 1000;
-    velocity.y = std::strtod(values[6].base(), nullptr) * 1000;
-    velocity.z = std::strtod(values[7].base(), nullptr) * 1000;
+    position.x = state[0]; position.y = state[1]; position.z = state[2];
+    velocity.x = state[3]; velocity.y = state[4]; velocity.z = state[5];
 }
 
-// ----------------------- Simulation ------------------------
-Simulation::Simulation():
-    entities(),
-    launch_phases(),
-    elapsed_time()
+SolarSystem_Base::SolarSystem_Base(const std::string &kernel_path)
+{
+    furnsh_c(kernel_path.c_str());
+}
+
+SolarSystem::SolarSystem(const std::string &kernel_path):
+    SolarSystem_Base(kernel_path),
+    sun    ("10",  "SSB"),
+    mercury("1",   "SSB"),
+    venus  ("2",   "SSB"),
+    earth  ("399", "SSB"),
+    moon   ("301", "SSB"),
+    mars   ("4",   "SSB"),
+    jupyter("5",   "SSB"),
+    saturn ("6",   "SSB"),
+    uranus ("7",   "SSB"),
+    neptune("8",   "SSB"),
+    m_kernel_path(kernel_path)
 {}
+
+SolarSystem::~SolarSystem()
+{
+    unload_c(m_kernel_path.c_str());
+}
+
+void SolarSystem::Init(Time t)
+{
+    sun    .Init(t);
+    mercury.Init(t);
+    venus  .Init(t);
+    earth  .Init(t);
+    moon   .Init(t);
+    mars   .Init(t);
+    jupyter.Init(t);
+    saturn .Init(t);
+    uranus .Init(t);
+    neptune.Init(t);
+}
 
 void Simulation::Step(Time dt)
 {

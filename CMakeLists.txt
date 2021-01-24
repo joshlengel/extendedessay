@@ -19,11 +19,8 @@ set(sources "Main.cpp" "Sim.cpp" "Launch.cpp")
 
 list(TRANSFORM sources PREPEND "${EE_SRC}/")
 
-# dependencies
-find_package(Python3 COMPONENTS Development NumPy)
-
 # build
 add_executable(ExtendedEssay ${sources})
 
-target_include_directories(ExtendedEssay PRIVATE ${Python3_INCLUDE_DIRS} ${Python3_NumPy_INCLUDE_DIRS} "${EE_DEPS}/matplotlib")
-target_link_libraries(ExtendedEssay Python3::Python Python3::NumPy)
+target_include_directories(ExtendedEssay PRIVATE "${EE_DEPS}/cspice/include")
+target_link_libraries(ExtendedEssay "${EE_DEPS}/cspice/lib/cspice.a")
