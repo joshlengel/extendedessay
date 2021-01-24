@@ -85,6 +85,5 @@ void LaunchData::Compute(SolarSystem *solar_system)
         double v_req = sqrt(v_esc_squared + v_inf_squared);
 
         dv_1 = v_req - sqrt(v_or_squared);
-        std::cout << dv_1 << std::endl;
     }
 }

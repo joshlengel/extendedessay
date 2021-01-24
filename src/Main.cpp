@@ -1,7 +1,7 @@
 #include"Sim.h"
 #include"Launch.h"
 
-#include<iostream>
+#include<vector>
 
 int main(int argc, char **argv)
 {
@@ -53,13 +53,29 @@ int main(int argc, char **argv)
     Time exit_time_start = exit_time_center - exit_time_span;
     Time exit_time_end = exit_time_center + exit_time_span;
 
-    std::cout
-        << "Earth position: " << reinterpret_cast<StaticEntity*>(solar_system.earth)->GetPosition(launch_data.time_inject) << '\n'
-        << "Earth Velocity: " << reinterpret_cast<StaticEntity*>(solar_system.earth)->GetVelocity(launch_data.time_inject) << '\n'
-        << "Mars position: " << reinterpret_cast<StaticEntity*>(solar_system.mars)->GetPosition(launch_data.time_inject) << '\n'
-        << "Mars velocity: " << reinterpret_cast<StaticEntity*>(solar_system.mars)->GetVelocity(launch_data.time_inject) << std::endl;
+    uint32_t precision = 100;
 
-    launch_data.Compute(&solar_system);
+    std::vector<double> x;
+    std::vector<double> y;
+    std::vector<double> z;
+
+    Time x_step = Time::FromDays(inject_time_span.Days() * 2 / precision);
+    Time y_step = Time::FromDays(exit_time_span.Days() * 2 / precision);
+
+    for (Time tx = inject_time_start; tx < inject_time_end; tx += x_step)
+    {
+        for (Time ty = exit_time_start;   ty < exit_time_end;   ty += y_step)
+        {
+            launch_data.time_inject = tx; 
+            launch_data.time_exit = ty;
+
+            launch_data.Compute(&solar_system);
+
+            x.push_back(tx.Days());
+            y.push_back(ty.Days());
+            z.push_back(launch_data.dv_1);
+        }
+    }
 
     return 0;
 }
