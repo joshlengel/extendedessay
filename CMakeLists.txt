@@ -19,5 +19,12 @@ set(sources "Main.cpp" "Sim.cpp" "Launch.cpp")
 
 list(TRANSFORM sources PREPEND "${EE_SRC}/")
 
+# dependencies
+add_subdirectory("${EE_DEPS}/matplotlib")
+
 # build
 add_executable(ExtendedEssay ${sources})
+
+target_include_directories(ExtendedEssay PRIVATE "${EE_DEPS}/matplotlib")
+
+target_link_libraries(ExtendedEssay MatplotlibC++)
