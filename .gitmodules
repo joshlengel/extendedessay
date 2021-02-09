@@ -1,0 +1,3 @@
+[submodule "deps/cpplot"]
+	path = deps/cpplot
+	url = https://github.com/thclark/cpplot
