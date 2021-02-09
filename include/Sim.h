@@ -33,6 +33,7 @@ struct Vec
     Vec Normalized() const;
 
     static double Dot(const Vec &v1, const Vec &v2);
+    static Vec Cross(const Vec &v1, const Vec &v2) { return { v1.y * v2.z - v1.z * v2.y, v1.z * v2.x - v1.x * v2.z, v1.x * v2.y - v1.y * v2.x }; }
 };
 
 // Useful for outputting debug info
@@ -48,6 +49,7 @@ struct Time
     double Minutes() const;
     double Hours() const;
     double Days() const;
+    std::string Str() const;
 
     static Time FromSeconds(double seconds);
     static Time FromMinutes(double minutes);
@@ -57,8 +59,12 @@ struct Time
 
     Time operator+(const Time &t) const;
     Time operator-(const Time &t) const;
+    Time operator*(double d) const;
+    Time operator/(double d) const;
     Time &operator+=(const Time &t);
     Time &operator-=(const Time &t);
+    Time &operator*=(double d);
+    Time &operator/=(double d);
 
     bool operator>(const Time &t) const;
     bool operator<(const Time &t) const;

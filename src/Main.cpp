@@ -6,10 +6,92 @@
 #include<iostream>
 #include<iomanip>
 
-int main(int argc, char **argv)
+#include<random>
+#include<chrono>
+
+SolarSystem solar_system("/home/joshlengel/Dev/C++/ExtendedEssay/assets/solar_system.tm");
+std::string start_date = "2020 Jan 1 00:00:00.00";
+
+LaunchData launch_data;
+
+void GetLaunchWindowAndPorkchop()
 {
-    SolarSystem solar_system("assets/solar_system.tm");
-    solar_system.Init(Time::FromStr("2020 Jan 1 00:00:00.00"));
+    solar_system.Init(Time::FromStr(start_date));
+
+    // Use simulated annealing to find optimal launch date
+    int32_t T_iterations = 10000;
+    double T_max = 10000.0;
+
+    double T_step = T_max / T_iterations;
+
+    std::default_random_engine time_engine;
+    std::default_random_engine prob_engine;
+
+    std::seed_seq seed_seq({ static_cast<uint_fast32_t>(std::chrono::system_clock::now().time_since_epoch().count()) });
+    time_engine.seed(seed_seq);
+    prob_engine.seed(seed_seq);
+
+    std::uniform_real_distribution time_dist(-Time::FromDays(60).Seconds(), Time::FromDays(60).Seconds());
+    std::uniform_real_distribution prob_dist(0.0, 1.0);
+
+    Time min_start = Time::FromStr("2021 Jan 1 00:00");
+    Time min_end = Time::FromStr("2021 Mar 1 00:00");
+
+    launch_data.time_inject = min_start;
+    launch_data.time_exit = min_end;
+    launch_data.Compute(&solar_system);
+
+    LaunchData test_data = launch_data;
+
+    // Use linear temperature decrease
+    for (double T = T_max; T > 0; T -= T_step)
+    {
+        Time ns = test_data.time_inject + Time::FromSeconds(time_dist(time_engine));
+        Time ne = test_data.time_exit + Time::FromSeconds(time_dist(time_engine));
+
+        // Don't allow launches before 2021
+        if (ns < min_start || ne < min_end) continue;
+
+        LaunchData nd = test_data;
+        nd.time_inject = ns;
+        nd.time_exit = ne;
+        nd.Compute(&solar_system);
+
+        if (nd.dv_1 < test_data.dv_1)
+        {
+            // If new solution is more efficient, replace directly
+            test_data.time_inject = ns;
+            test_data.time_exit = ne;
+            test_data.dv_1 = nd.dv_1;
+        }
+        else
+        {
+            // Use worse solution to enable possibility of exiting local minimum
+            double alpha = exp(-(nd.dv_1 - test_data.dv_1) / T);
+
+            if (prob_dist(prob_engine) < alpha)
+            {
+                test_data.time_inject = ns;
+                test_data.time_exit = ne;
+                test_data.dv_1 = nd.dv_1;
+            }
+        }
+        
+        // Update absolute minimum
+        if (test_data.dv_1 < launch_data.dv_1)
+        {
+            launch_data = test_data;
+        }
+    }
+
+    std::cout << "Launch date: " << launch_data.time_inject.Str() << ", Arrival date: " << launch_data.time_exit.Str() << ", Delta v: " << launch_data.dv_1 << std::endl;
+
+    GeneratePorkChop("python/graph-1.json", &solar_system, launch_data);
+}
+
+void SimulateLaunch()
+{
+    solar_system.Init(Time::FromStr(start_date));
 
     Simulation simulation;
     simulation.entities.push_back(&solar_system.sun    );
@@ -23,86 +105,31 @@ int main(int argc, char **argv)
     simulation.entities.push_back(&solar_system.uranus );
     simulation.entities.push_back(&solar_system.neptune);
 
-    // --------------------------------------------------------------------------
+    launch_data.time_inject = Time::FromStr("2022 Sep 27 00:00");
+    launch_data.time_exit = Time::FromStr("2023 Jun 01 00:00");
 
-    LaunchData launch_data;
+    launch_data.Compute(&solar_system);
+
+    std::cout << "C3: " << launch_data.c3 << ", v_inf: " << launch_data.v_inf << ", Dv 1: " << launch_data.dv_1 << ", Dv 2: " << launch_data.dv_2 << ", Dv: " << (launch_data.dv_1 + launch_data.dv_2) << std::endl;
+}
+
+int main(int argc, char **argv)
+{
     launch_data.payload = 100000.0; // kg
     launch_data.rocket_thrust = 6000000.0; // N
     launch_data.rocket_weight = 85000.0; // kg
     launch_data.fuel_flow_rate = 931.2; // kg / s
-    launch_data.Rleo = 1000000.0; // m
-    launch_data.Rlmo = 1000000.0; // m
 
-    Time inject_time_center = Time::FromStr("2020 Jul 30 11:50:00.00");
-    Time inject_time_span = Time::FromDays(100);
-    Time inject_time_start = inject_time_center - inject_time_span;
-    Time inject_time_end = inject_time_center + inject_time_span;
+    double Re = 6371000; // m
+    double Rm = 3389500; // m
+    launch_data.Rleo = 1000000.0 + Re; // m
+    launch_data.Rlmo = 1000000.0 + Rm; // m
 
-    Time exit_time_center = Time::FromStr("2021 Feb 18 00:00:00.00");
-    Time exit_time_span = Time::FromDays(150);
-    Time exit_time_start = exit_time_center - exit_time_span;
-    Time exit_time_end = exit_time_center + exit_time_span;
+    // -----------------------------------------
 
-    uint32_t precision = 1000;
+    // GetLaunchWindowAndPorkchop();
 
-    std::vector<double> x;
-    std::vector<double> y;
-    std::vector<double> z;
+    // -----------------------------------------
 
-    Time x_step = Time::FromDays(inject_time_span.Days() * 2 / precision);
-    Time y_step = Time::FromDays(exit_time_span.Days() * 2 / precision);
-
-    Time tx = inject_time_start;
-
-    for (uint32_t i = 0; i < precision; ++i)
-    {
-        Time ty = exit_time_start;
-
-        for (uint32_t j = 0; j < precision; ++j)
-        {
-            launch_data.time_inject = tx; 
-            launch_data.time_exit = ty;
-
-            launch_data.Compute(&solar_system);
-
-            x.push_back(tx.Days());
-            y.push_back(ty.Days());
-            z.push_back(launch_data.dv_1);
-
-            ty += y_step;
-        }
-
-        tx += x_step;
-    }
-
-    std::ofstream out("python/graph-1.json");
-    out << std::setprecision(13);
-    out << "{\n"
-        << "\t\"x\":[";
-
-    for (uint32_t i = 0; i < x.size() - 1; ++i)
-    {
-        out << x[i] << ",";
-    }
-
-    out << x.back() << "],\n"
-        << "\t\"y\":[";
-    
-    for (uint32_t i = 0; i < y.size() - 1; ++i)
-    {
-        out << y[i] << ",";
-    }
-
-    out << y.back() << "],\n"
-        << "\t\"z\":[";
-    
-    for (uint32_t i = 0; i < z.size() - 1; ++i)
-    {
-        out << z[i] << ",";
-    }
-
-    out << z.back() << "]\n"
-        << "}";
-
-    return 0;
+    SimulateLaunch();
 }

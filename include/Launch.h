@@ -18,6 +18,9 @@ struct LaunchData
     Time time_exit;
 
     // Dependent variables
+    double c3;
+    double v_inf;
+
     double dv_1; // m / s
     double dv_2; // m / s
 
@@ -25,3 +28,5 @@ struct LaunchData
 
     void Compute(SolarSystem *solar_system);
 };
+
+void GeneratePorkChop(const std::string &out, SolarSystem *solar_system, const LaunchData &launch_data);

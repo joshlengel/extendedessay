@@ -44,6 +44,8 @@ double Time::Minutes() const { return m_seconds / 60.0; }
 double Time::Hours()   const { return m_seconds / 3600.0; }
 double Time::Days()    const { return m_seconds / 86400.0; }
 
+std::string Time::Str() const { char buff[30]; et2utc_c(m_seconds, "ISOC", 2, 30, buff); return buff; }
+
 Time Time::FromSeconds(double seconds) { return seconds; }
 Time Time::FromMinutes(double minutes) { return minutes * 60.0; }
 Time Time::FromHours(double hours)     { return hours * 3600.0; }
@@ -54,8 +56,12 @@ Time Time::FromStr(const std::string &date) { double t; str2et_c(date.c_str(), &
 
 Time Time::operator+(const Time &t) const { return m_seconds + t.m_seconds; }
 Time Time::operator-(const Time &t) const { return m_seconds - t.m_seconds; }
+Time Time::operator*(double d) const { return m_seconds * d; }
+Time Time::operator/(double d) const { return m_seconds / d; }
 Time &Time::operator+=(const Time &t)     { return *this = m_seconds + t.m_seconds; }
 Time &Time::operator-=(const Time &t)     { return *this = m_seconds - t.m_seconds; }
+Time &Time::operator*=(double d) { return *this = m_seconds * d; }
+Time &Time::operator/=(double d) { return *this = m_seconds / d; }
 
 bool Time::operator>(const Time &t)  const { return m_seconds > t.m_seconds; }
 bool Time::operator<(const Time &t)  const { return m_seconds < t.m_seconds; }
@@ -105,7 +111,7 @@ StaticEntity::StaticEntity(const std::string &target, const std::string &observe
     int dim = 1;
     double gm;
     bodvrd_c(target.c_str(), "GM", 1, &dim, &gm);
-    mass = gm / Constants::G;
+    mass = gm / Constants::G * 1e9;
 }
 
 void StaticEntity::Init(Time t)
@@ -142,6 +148,9 @@ void StaticEntity::GetState(Vec &position, Vec &velocity, Time t) const
 
     position.x = state[0]; position.y = state[1]; position.z = state[2];
     velocity.x = state[3]; velocity.y = state[4]; velocity.z = state[5];
+
+    position = position * 1000;
+    velocity = velocity * 1000;
 }
 
 SolarSystem_Base::SolarSystem_Base(const std::string &kernel_path)
