@@ -114,6 +114,7 @@ void LaunchData::Compute(SolarSystem *solar_system)
     if (lambert_solve(solar_system->earth.GetPosition(time_inject), solar_system->mars.GetPosition(time_exit), (time_exit - time_inject).Seconds(), Constants::G * solar_system->sun.mass, 400, 1e-8, v0, vf))
     {
         Vec v0i = v0.Normalized();
+        inject_normal = v0i;
         Vec ve = v0i * Vec::Dot(v0i, solar_system->earth.GetVelocity(time_inject));
         double v_inf_e_squared = (v0 - ve).LengthSquared();
         c3 = v_inf_e_squared;
@@ -128,6 +129,8 @@ void LaunchData::Compute(SolarSystem *solar_system)
 
         double v2 = sqrt(2.0 * Constants::G * solar_system->mars.mass / Rlmo + v_inf_m_squared);
         dv_2 = v2 - sqrt(Constants::G * solar_system->mars.mass / Rlmo);
+
+        phi_2 = asin(1.0f / (1.0f + Rleo * v_inf_e_squared / (Constants::G * solar_system->earth.mass)));
     }
     else
     {
@@ -142,11 +145,9 @@ void GeneratePorkChop(const std::string &out, SolarSystem *solar_system, const L
 {
     Time inject_span = Time::FromDays(30);
     Time inject_start = launch_data.time_inject - inject_span;
-    Time inject_end = launch_data.time_inject + inject_span;
 
     Time exit_span = Time::FromDays(100);
     Time exit_start = launch_data.time_exit - exit_span;
-    Time exit_end = launch_data.time_exit + exit_span;
 
     uint32_t precision = 1000;
     Time step_x = inject_span * 2.0 / precision;
@@ -182,27 +183,6 @@ void GeneratePorkChop(const std::string &out, SolarSystem *solar_system, const L
 
         tx += step_x;
     }
-
-    /*
-    std::ofstream file(out);
-
-    file << std::setprecision(13)
-        << "{\n\t\"x\":[";
-    
-    for (uint32_t i = 0; i < x.size() - 1; ++i)
-        file << x[i] << ",";
-    
-    file << x.back() << "],\n\t\"y\":[";
-
-    for (uint32_t i = 0; i < y.size() - 1; ++i)
-        file << y[i] << ",";
-    
-    file << y.back() << "],\n\t\"z\":[";
-
-    for (uint32_t i = 0; i < z.size() - 1; ++i)
-        file << z[i] << ",";
-    
-    file << z.back() << "]\n}";*/
 
     std::ofstream file(out);
     file << std::setprecision(13);

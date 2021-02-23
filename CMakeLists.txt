@@ -15,7 +15,7 @@ set(EXECUTABLE_OUTPUT_PATH "${EE_BIN}")
 
 # sources
 include_directories("${EE_ROOT}/include")
-set(sources "Main.cpp" "Sim.cpp" "Launch.cpp")
+set(sources "Main.cpp" "Sim.cpp" "Launch.cpp" "Json.cpp")
 
 list(TRANSFORM sources PREPEND "${EE_SRC}/")
 
@@ -23,4 +23,4 @@ list(TRANSFORM sources PREPEND "${EE_SRC}/")
 add_executable(ExtendedEssay ${sources})
 
 target_include_directories(ExtendedEssay PRIVATE "${EE_DEPS}/cspice/include")
-target_link_libraries(ExtendedEssay "${EE_DEPS}/cspice/lib/cspice.a")
+target_link_libraries(ExtendedEssay pthread "${EE_DEPS}/cspice/lib/cspice.a")

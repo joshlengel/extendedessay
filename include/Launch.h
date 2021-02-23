@@ -18,6 +18,8 @@ struct LaunchData
     Time time_exit;
 
     // Dependent variables
+    Vec inject_normal;
+
     double c3;
     double v_inf;
 

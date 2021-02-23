@@ -32,6 +32,27 @@ double Vec::Length() const { return sqrt(x*x + y*y + z*z); }
 Vec Vec::Normalized() const { return *this / Length(); }
 
 double Vec::Dot(const Vec &v1, const Vec &v2) { return v1.x*v2.x + v1.y*v2.y + v1.z*v2.z; }
+Vec Vec::Cross(const Vec &v1, const Vec &v2) { return { v1.y * v2.z - v1.z * v2.y, v1.z * v2.x - v1.x * v2.z, v1.x * v2.y - v1.y * v2.x }; }
+
+Vec Vec::Rotate(const Vec &v, const Vec &axis, double angle)
+{
+    double sa = sin(angle);
+    double ca = cos(angle);
+
+    double mat[9] =
+    {
+        ca + axis.x * axis.x * (1.0f - ca), axis.x * axis.y * (1.0f - ca) - axis.z * sa, axis.x * axis.z * (1.0f - ca) + axis.y * sa,
+        axis.y * axis.x * (1.0f - ca) + axis.z * sa, ca + axis.y * axis.y * (1.0f - ca), axis.y * axis.z * (1.0f - ca) - axis.x * sa,
+        axis.z * axis.x * (1.0f - ca) - axis.y * sa, axis.z * axis.y * (1.0f - ca) + axis.x * sa, ca + axis.z * axis.z * (1.0f - ca)
+    };
+
+    return
+    {
+        v.x * mat[0] + v.y * mat[1] + v.z * mat[2],
+        v.x * mat[3] + v.y * mat[4] + v.z * mat[5],
+        v.x * mat[6] + v.y * mat[7] + v.z * mat[8],
+    };
+}
 
 std::ostream &operator<<(std::ostream &os, const Vec &v) { return os << '(' << v.x << ", " << v.y << ", " << v.z << ')'; }
 
@@ -114,6 +135,16 @@ StaticEntity::StaticEntity(const std::string &target, const std::string &observe
     mass = gm / Constants::G * 1e9;
 }
 
+StaticEntity::StaticEntity(const StaticEntity &entity):
+    Entity(Vec(), Vec(), 0.0),
+    m_target(entity.m_target),
+    m_observer(entity.m_observer),
+    m_elapsed()
+{
+    do_gravity = entity.do_gravity;
+    mass = entity.mass;
+}
+
 void StaticEntity::Init(Time t)
 {
     m_elapsed = t;
@@ -153,10 +184,18 @@ void StaticEntity::GetState(Vec &position, Vec &velocity, Time t) const
     velocity = velocity * 1000;
 }
 
+void StaticEntity::Reset(Time t)
+{
+    Init(t);
+}
+
 SolarSystem_Base::SolarSystem_Base(const std::string &kernel_path)
 {
     furnsh_c(kernel_path.c_str());
 }
+
+SolarSystem_Base::SolarSystem_Base()
+{}
 
 SolarSystem::SolarSystem(const std::string &kernel_path):
     SolarSystem_Base(kernel_path),
@@ -173,9 +212,24 @@ SolarSystem::SolarSystem(const std::string &kernel_path):
     m_kernel_path(kernel_path)
 {}
 
+SolarSystem::SolarSystem(const SolarSystem &system):
+    SolarSystem_Base(),
+    sun    (system.sun    ),
+    mercury(system.mercury),
+    venus  (system.venus  ),
+    earth  (system.earth  ),
+    moon   (system.moon   ),
+    mars   (system.mars   ),
+    jupyter(system.jupyter),
+    saturn (system.saturn ),
+    uranus (system.uranus ),
+    neptune(system.neptune),
+    m_kernel_path(system.m_kernel_path)
+{}
+
 SolarSystem::~SolarSystem()
 {
-    unload_c(m_kernel_path.c_str());
+    //unload_c(m_kernel_path.c_str());
 }
 
 void SolarSystem::Init(Time t)
@@ -190,6 +244,20 @@ void SolarSystem::Init(Time t)
     saturn .Init(t);
     uranus .Init(t);
     neptune.Init(t);
+}
+
+void SolarSystem::Reset(Time t)
+{
+    sun    .Reset(t);
+    mercury.Reset(t);
+    venus  .Reset(t);
+    earth  .Reset(t);
+    moon   .Reset(t);
+    mars   .Reset(t);
+    jupyter.Reset(t);
+    saturn .Reset(t);
+    uranus .Reset(t);
+    neptune.Reset(t);
 }
 
 void Simulation::Step(Time dt)
@@ -238,4 +306,9 @@ void Simulation::Step(Time dt)
         e1->force = e1->force + gravity;
         e2->force = e2->force - gravity;
     }
+}
+
+void Simulation::Reset(Time t)
+{
+    elapsed_time = t;
 }

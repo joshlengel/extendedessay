@@ -33,7 +33,8 @@ struct Vec
     Vec Normalized() const;
 
     static double Dot(const Vec &v1, const Vec &v2);
-    static Vec Cross(const Vec &v1, const Vec &v2) { return { v1.y * v2.z - v1.z * v2.y, v1.z * v2.x - v1.x * v2.z, v1.x * v2.y - v1.y * v2.x }; }
+    static Vec Cross(const Vec &v1, const Vec &v2);
+    static Vec Rotate(const Vec &v, const Vec &axis, double angle);
 };
 
 // Useful for outputting debug info
@@ -106,12 +107,14 @@ struct Entity
 struct StaticEntity : Entity
 {
     StaticEntity(const std::string &target, const std::string &observer);
+    StaticEntity(const StaticEntity &entitiy);
     void Init(Time t);
 
     Vec GetPosition(Time t) const;
     Vec GetVelocity(Time t) const;
 
     void Step(double dt) override;
+    void Reset(Time t);
 
 private:
     std::string m_target;
@@ -126,7 +129,7 @@ private:
 };
 
 // Used for executing statements before planets initialize
-struct SolarSystem_Base { protected: SolarSystem_Base(const std::string &kernel_path); };
+struct SolarSystem_Base { protected: SolarSystem_Base(const std::string &kernel_path); SolarSystem_Base(); };
 
 struct SolarSystem : public SolarSystem_Base
 {
@@ -142,9 +145,11 @@ struct SolarSystem : public SolarSystem_Base
     StaticEntity neptune;
 
     SolarSystem(const std::string &kernel_path);
+    SolarSystem(const SolarSystem &system);
     ~SolarSystem();
 
     void Init(Time t);
+    void Reset(Time t);
 
 private:
     std::string m_kernel_path;
@@ -167,4 +172,5 @@ struct Simulation
     Time elapsed_time;
 
     void Step(Time dt);
+    void Reset(Time t);
 };

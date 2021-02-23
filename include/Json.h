@@ -16,8 +16,6 @@ public:
     {
         m_os << "{\n";
         ++num_tabs;
-        for (uint32_t i = 0; i < num_tabs; ++i)
-            m_os << '\t';
     }
 
     virtual void Write(const std::string &name)
@@ -29,6 +27,7 @@ public:
             m_os << '\t';
         
         m_os << '\"' << name << "\":";
+        ++m_num_members;
     }
 
     virtual void End() const
@@ -62,9 +61,9 @@ public:
         m_val(val)
     {}
 
-    virtual void Begin() const { m_os << '\"' << m_val; }
+    virtual void Begin() const { m_os << m_val; }
     virtual void Write(const std::string &name) {}
-    virtual void End() const { m_os << '\"'; }
+    virtual void End() const { }
 
 protected:
     T m_val;
@@ -88,16 +87,21 @@ public:
     template <typename InItr>
     void WritePrimitiveArray(const InItr &begin, const InItr &end)
     {
+        --num_tabs;
         if (begin == end) return;
 
-        if (m_num_members > 0)
-            m_os << *begin;
+        if (m_num_members == 0)
+        {
+            JsonPrimitive primitive(*this, *begin);
+            primitive.Begin(); primitive.End();
+            ++m_num_members;
+        }
 
         auto itr = begin; ++itr;
         for (; itr != end; ++itr)
         {
             ++m_num_members;
-            JsonPrimitive primitive(*itr);
+            JsonPrimitive primitive(*this, *itr);
             m_os << ',';
             primitive.Begin(); primitive.End();
         }
