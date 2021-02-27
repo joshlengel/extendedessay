@@ -2,7 +2,7 @@
 
 #include"Sim.h"
 #include"Constants.h"
-#include"Json.h"
+#include"Utils.h"
 
 #include<cmath>
 #include<fstream>
@@ -113,24 +113,25 @@ void LaunchData::Compute(SolarSystem *solar_system)
     Vec v0, vf;
     if (lambert_solve(solar_system->earth.GetPosition(time_inject), solar_system->mars.GetPosition(time_exit), (time_exit - time_inject).Seconds(), Constants::G * solar_system->sun.mass, 400, 1e-8, v0, vf))
     {
-        Vec v0i = v0.Normalized();
-        inject_normal = v0i;
-        Vec ve = v0i * Vec::Dot(v0i, solar_system->earth.GetVelocity(time_inject));
-        double v_inf_e_squared = (v0 - ve).LengthSquared();
+        Vec ve = solar_system->earth.GetVelocity(time_inject);
+        inject_normal = v0 - ve;
+        double v_inf_e_squared = inject_normal.LengthSquared();
+        inject_normal = inject_normal.Normalized();
         c3 = v_inf_e_squared;
         
         double v1 = sqrt(2.0 * Constants::G * solar_system->earth.mass / Rleo + v_inf_e_squared);
         dv_1 = v1 - sqrt(Constants::G * solar_system->earth.mass / Rleo);
 
         Vec vfi = vf.Normalized();
-        Vec vm = vfi * Vec::Dot(vfi, solar_system->mars.GetVelocity(time_exit));
-        double v_inf_m_squared = (vf - vm).LengthSquared();
+        Vec vm = solar_system->mars.GetVelocity(time_exit);
+        Vec exit_normal = vfi - vm;
+        double v_inf_m_squared = exit_normal.LengthSquared();
         v_inf = sqrt(v_inf_m_squared);
 
         double v2 = sqrt(2.0 * Constants::G * solar_system->mars.mass / Rlmo + v_inf_m_squared);
         dv_2 = v2 - sqrt(Constants::G * solar_system->mars.mass / Rlmo);
 
-        phi_2 = asin(1.0f / (1.0f + Rleo * v_inf_e_squared / (Constants::G * solar_system->earth.mass)));
+        phi_2 = asin(1.0 / (1.0 + Rleo * v_inf_e_squared / (Constants::G * solar_system->earth.mass)));
     }
     else
     {
@@ -184,29 +185,5 @@ void GeneratePorkChop(const std::string &out, SolarSystem *solar_system, const L
         tx += step_x;
     }
 
-    std::ofstream file(out);
-    file << std::setprecision(13);
-
-    JsonWriter writer(file);
-    writer.Begin();
-
-    writer.Write("x");
-    JsonArray x_obj(writer);
-    x_obj.Begin();
-    x_obj.WritePrimitiveArray(x.begin(), x.end());
-    x_obj.End();
-
-    writer.Write("y");
-    JsonArray y_obj(writer);
-    y_obj.Begin();
-    y_obj.WritePrimitiveArray(y.begin(), y.end());
-    y_obj.End();
-
-    writer.Write("z");
-    JsonArray z_obj(writer);
-    z_obj.Begin();
-    z_obj.WritePrimitiveArray(z.begin(), z.end());
-    z_obj.End();
-
-    writer.End();
+    WritePositions(out, x, y, z);
 }

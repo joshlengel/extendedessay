@@ -6,90 +6,6 @@
 
 #include<SpiceUsr.h>
 
-// -------------------------- Vec -----------------------------
-Vec::Vec():
-    x(0.0), y(0.0), z(0.0) {}
-
-Vec::Vec(double x, double y, double z):
-    x(x), y(y), z(z) {}
-
-Vec::Vec(const Vec &v):
-    x(v.x), y(v.y), z(v.z) {}
-
-Vec &Vec::operator=(const Vec &v) { x=v.x; y=v.y; z=v.z; return *this; }
-
-Vec Vec::operator+(const Vec &v) const { return { x+v.x, y+v.y, z+v.z }; }
-Vec Vec::operator-(const Vec &v) const { return { x-v.x, y-v.y, z-v.z }; }
-Vec Vec::operator*(double s)     const { return {   x*s,   y*s,   z*s }; }
-Vec Vec::operator-()             const { return {    -x,    -y,    -z }; }
-
-// Dividing once and multiplying three times by the inverse is more efficient than dividing three times
-Vec Vec::operator/(double s) const { double inv_s = 1.0 / s; return { x*inv_s, y*inv_s, z*inv_s }; }
-
-double Vec::LengthSquared() const { return x*x + y*y + z*z; }
-
-double Vec::Length() const { return sqrt(x*x + y*y + z*z); }
-Vec Vec::Normalized() const { return *this / Length(); }
-
-double Vec::Dot(const Vec &v1, const Vec &v2) { return v1.x*v2.x + v1.y*v2.y + v1.z*v2.z; }
-Vec Vec::Cross(const Vec &v1, const Vec &v2) { return { v1.y * v2.z - v1.z * v2.y, v1.z * v2.x - v1.x * v2.z, v1.x * v2.y - v1.y * v2.x }; }
-
-Vec Vec::Rotate(const Vec &v, const Vec &axis, double angle)
-{
-    double sa = sin(angle);
-    double ca = cos(angle);
-
-    double mat[9] =
-    {
-        ca + axis.x * axis.x * (1.0f - ca), axis.x * axis.y * (1.0f - ca) - axis.z * sa, axis.x * axis.z * (1.0f - ca) + axis.y * sa,
-        axis.y * axis.x * (1.0f - ca) + axis.z * sa, ca + axis.y * axis.y * (1.0f - ca), axis.y * axis.z * (1.0f - ca) - axis.x * sa,
-        axis.z * axis.x * (1.0f - ca) - axis.y * sa, axis.z * axis.y * (1.0f - ca) + axis.x * sa, ca + axis.z * axis.z * (1.0f - ca)
-    };
-
-    return
-    {
-        v.x * mat[0] + v.y * mat[1] + v.z * mat[2],
-        v.x * mat[3] + v.y * mat[4] + v.z * mat[5],
-        v.x * mat[6] + v.y * mat[7] + v.z * mat[8],
-    };
-}
-
-std::ostream &operator<<(std::ostream &os, const Vec &v) { return os << '(' << v.x << ", " << v.y << ", " << v.z << ')'; }
-
-// ------------------------- Time ----------------------------
-Time::Time(): m_seconds(0.0) {}
-Time::Time(double seconds): m_seconds(seconds) {}
-
-double Time::Seconds() const { return m_seconds; }
-double Time::Minutes() const { return m_seconds / 60.0; }
-double Time::Hours()   const { return m_seconds / 3600.0; }
-double Time::Days()    const { return m_seconds / 86400.0; }
-
-std::string Time::Str() const { char buff[30]; et2utc_c(m_seconds, "ISOC", 2, 30, buff); return buff; }
-
-Time Time::FromSeconds(double seconds) { return seconds; }
-Time Time::FromMinutes(double minutes) { return minutes * 60.0; }
-Time Time::FromHours(double hours)     { return hours * 3600.0; }
-Time Time::FromDays(double days)       { return days * 86400.0; }
-
-// str2et_c conveniently returns J2000 date in seconds
-Time Time::FromStr(const std::string &date) { double t; str2et_c(date.c_str(), &t); return t; }
-
-Time Time::operator+(const Time &t) const { return m_seconds + t.m_seconds; }
-Time Time::operator-(const Time &t) const { return m_seconds - t.m_seconds; }
-Time Time::operator*(double d) const { return m_seconds * d; }
-Time Time::operator/(double d) const { return m_seconds / d; }
-Time &Time::operator+=(const Time &t)     { return *this = m_seconds + t.m_seconds; }
-Time &Time::operator-=(const Time &t)     { return *this = m_seconds - t.m_seconds; }
-Time &Time::operator*=(double d) { return *this = m_seconds * d; }
-Time &Time::operator/=(double d) { return *this = m_seconds / d; }
-
-bool Time::operator>(const Time &t)  const { return m_seconds > t.m_seconds; }
-bool Time::operator<(const Time &t)  const { return m_seconds < t.m_seconds; }
-bool Time::operator>=(const Time &t) const { return m_seconds >= t.m_seconds; }
-bool Time::operator<=(const Time &t) const { return m_seconds <= t.m_seconds; }
-bool Time::operator==(const Time &t) const { return m_seconds == t.m_seconds; }
-
 // --------------------------- Entity --------------------------
 Entity::Entity(const Vec &position, const Vec &velocity, double mass):
     position(position),
@@ -153,16 +69,16 @@ void StaticEntity::Init(Time t)
 
 Vec StaticEntity::GetPosition(Time t) const
 {
-    Vec position, velocity;
-    GetState(position, velocity, t);
-    return position;
+    Vec p, v;
+    GetState(p, v, t);
+    return p;
 }
 
 Vec StaticEntity::GetVelocity(Time t) const
 {
-    Vec position, velocity;
-    GetState(position, velocity, t);
-    return velocity;
+    Vec p, v;
+    GetState(p, v, t);
+    return v;
 }
 
 void StaticEntity::Step(double dt)
@@ -170,18 +86,18 @@ void StaticEntity::Step(double dt)
     GetState(position, velocity, m_elapsed += Time::FromSeconds(dt));
 }
 
-void StaticEntity::GetState(Vec &position, Vec &velocity, Time t) const
+void StaticEntity::GetState(Vec &p, Vec &v, Time t) const
 {
     double state[6];
     double lt;
     // Retrieve ephemeris from NASA database
     spkezr_c(m_target.c_str(), t.Seconds(), FRAME.c_str(), CORRECTION.c_str(), m_observer.c_str(), state, &lt);
 
-    position.x = state[0]; position.y = state[1]; position.z = state[2];
-    velocity.x = state[3]; velocity.y = state[4]; velocity.z = state[5];
+    p.x = state[0]; p.y = state[1]; p.z = state[2];
+    v.x = state[3]; v.y = state[4]; v.z = state[5];
 
-    position = position * 1000;
-    velocity = velocity * 1000;
+    p = p * 1000;
+    v = v * 1000;
 }
 
 void StaticEntity::Reset(Time t)

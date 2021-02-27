@@ -15,7 +15,7 @@ set(EXECUTABLE_OUTPUT_PATH "${EE_BIN}")
 
 # sources
 include_directories("${EE_ROOT}/include")
-set(sources "Main.cpp" "Sim.cpp" "Launch.cpp" "Json.cpp")
+set(sources "Main.cpp" "Sim.cpp" "Launch.cpp" "Utils.cpp")
 
 list(TRANSFORM sources PREPEND "${EE_SRC}/")
 

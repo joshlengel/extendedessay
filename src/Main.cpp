@@ -1,7 +1,6 @@
 #include"Sim.h"
 #include"Launch.h"
 #include"Constants.h"
-#include"Json.h"
 
 #include<vector>
 #include<fstream>
@@ -103,33 +102,6 @@ void GetLaunchWindowAndPorkchop()
     GeneratePorkChop("python/graph-1.json", &solar_system, launch_data);
 }
 
-void WritePositions(const std::string &file_name, const std::vector<double> &x, const std::vector<double> &y, const std::vector<double> &z)
-{
-    std::ofstream file(file_name);
-    JsonWriter writer(file);
-    writer.Begin();
-    writer.Write("data");
-    JsonObject positions(writer);
-    positions.Begin();
-    positions.Write("x");
-    JsonArray arr_x(positions);
-    arr_x.Begin();
-    arr_x.WritePrimitiveArray(x.begin(), x.end());
-    arr_x.End();
-    positions.Write("y");
-    JsonArray arr_y(positions);
-    arr_y.Begin();
-    arr_y.WritePrimitiveArray(y.begin(), y.end());
-    arr_y.End();
-    positions.Write("z");
-    JsonArray arr_z(positions);
-    arr_z.Begin();
-    arr_z.WritePrimitiveArray(z.begin(), z.end());
-    arr_z.End();
-    positions.End();
-    writer.End();
-}
-
 void AdjustLaunchValues()
 {
     solar_system.Init(simulation_inject_time);
@@ -151,20 +123,26 @@ void AdjustLaunchValues()
         double phi_2;
     };
 
-    double T = 100.0;
-    constexpr const uint32_t num_samples = 100;
+    std::cout << "Starting dv: " << launch_data.dv_1 << ", starting phi: " << launch_data.phi_2 << std::endl;
+
+    double T = 1e11;
+    constexpr const uint32_t num_samples = 1;
     double stepT = T / static_cast<double>(num_samples);
 
-    double dv_bias = 500.0;
-    double dv_variance = 200.0;
-    double phi_bias = M_PI / 8.0;
-    double phi_variance = M_PI / 4.0;
+    double dv_bias = -6580.0;
+    double dv_variance = 0.0;
+    double phi_bias = -0.7;
+    double phi_variance = 0.0;
 
     SampleResult best = { INFINITY, launch_data.dv_1 + dv_bias, launch_data.phi_2 + phi_bias };
     SampleResult approx = best;
 
     std::random_device rd;
     std::uniform_real_distribution<double> r_dist(0.0, 1.0);
+
+    std::vector<double> ex, ey, ez, ebx, eby, ebz;
+    std::vector<double> mx, my, mz, mbx, mby, mbz;
+    std::vector<double> rx, ry, rz, rbx, rby, rbz;
 
     for (uint32_t i = 0; i < num_samples; ++i)
     {
@@ -188,26 +166,68 @@ void AdjustLaunchValues()
 
         // Reset simulation
         Vec vel_normal = Vec::Rotate(launch_data.inject_normal, em_plane_normal, -current_phi_2);
-        Vec rocket_pos = solar_system.earth.GetPosition(simulation_inject_time) + Vec::Rotate(launch_data.inject_normal, em_plane_normal, -current_phi_2 - M_PI_2) * launch_data.Rleo;
+        Vec rocket_pos = solar_system.earth.GetPosition(simulation_inject_time) + Vec::Rotate(launch_data.inject_normal, em_plane_normal, -(current_phi_2 + M_PI_2)) * launch_data.Rleo;
 
         Entity rocket(rocket_pos, solar_system.earth.GetVelocity(simulation_inject_time) + vel_normal * (current_dv_1 + sqrt(Constants::G * solar_system.earth.mass / launch_data.Rleo)), launch_data.rocket_weight);
         simulation.entities.push_back(&rocket);
+        std::cout << "Rocket velocity: " << rocket.velocity << std::endl;
+
+        simulation.launch_phases[simulation_exit_time - simulation_inject_time] =
+        {
+            callback: [](Simulation &sim, void *data)
+            {
+                Entity *rocket = reinterpret_cast<Entity*>(data);
+                double vel = (solar_system.mars.GetVelocity(simulation_exit_time) - rocket->velocity).Length();
+                double req = sqrt(Constants::G * solar_system.mars.mass / (rocket->position - solar_system.mars.GetPosition(simulation_exit_time)).Length());
+                double dv_2 = req + vel;
+
+                rocket->momentum = rocket->momentum + rocket->momentum.Normalized() * dv_2 * rocket->mass;
+                std::cout << "Vel: " << vel << " Delta V2: " << dv_2 << std::endl;
+
+            },
+            data: &rocket
+        };
         
         // Do simulation
 
         Time current = simulation_inject_time;
-        Time stop = simulation_exit_time + Time::FromDays(1);
+        Time graph_current = Time::FromDays(0);
+        Time stop = simulation_exit_time + Time::FromDays(400);
 
         Time dt = Time::FromSeconds(60);
+        Time graph_dt = Time::FromDays(1);
+
+        ex.clear(); ey.clear(); ez.clear();
+        mx.clear(); my.clear(); mz.clear();
+        rx.clear(); ry.clear(); rz.clear();
         
         do
         {
             simulation.Step(dt);
             current += dt;
+            graph_current += dt;
+
+            if (graph_current > graph_dt)
+            {
+                graph_current -= graph_dt;
+                Vec ep = solar_system.earth.GetPosition(current);
+                ex.push_back(ep.x);
+                ey.push_back(ep.y);
+                ez.push_back(ep.z);
+
+                Vec mp = solar_system.mars.GetPosition(current);
+                mx.push_back(mp.x);
+                my.push_back(mp.y);
+                mz.push_back(mp.z);
+
+                rx.push_back(rocket.position.x);
+                ry.push_back(rocket.position.y);
+                rz.push_back(rocket.position.z);
+            }
         }
         while (current < stop);
 
-        double dist = (rocket.position - solar_system.mars.GetPosition(simulation_exit_time)).Length();
+        double dist = (rocket.position - solar_system.mars.GetPosition(current)).Length();
 
         if (dist < approx.dist || exp((approx.dist - dist) / T) > r_dist(rd))
         {
@@ -219,6 +239,15 @@ void AdjustLaunchValues()
         if (approx.dist < best.dist)
         {
             best = approx;
+            ebx = ex;
+            eby = ey;
+            ebz = ez;
+            mbx = mx;
+            mby = my;
+            mbz = mz;
+            rbx = rx;
+            rby = ry;
+            rbz = rz;
         }
 
         T -= stepT;
@@ -229,6 +258,10 @@ void AdjustLaunchValues()
     std::cout << "Best distance: " << best.dist << "m" << std::endl;
     std::cout << "Dv 1: " << best.dv_1 << "m/s" << std::endl;
     std::cout << "Phi 2: " << best.phi_2 << "rad" << std::endl;
+
+    WritePositions("python/graph-earth.json", ebx, eby, ebz);
+    WritePositions("python/graph-mars.json", mbx, mby, mbz);
+    WritePositions("python/graph-rocket.json", rbx, rby, rbz);
 }
 
 int main(int argc, char **argv)
