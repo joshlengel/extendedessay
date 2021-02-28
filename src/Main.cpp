@@ -1,9 +1,10 @@
 #include"window/Window.h"
 #include"render/Model.h"
 #include"render/Shader.h"
+#include"body/Body.h"
 #include"camera/Camera.h"
 #include"camera/CameraController.h"
-#include"mesh/Planet.h"
+#include"mesh/MeshModel.h"
 
 #include<iostream>
 #include<chrono>
@@ -264,7 +265,9 @@ void AdjustLaunchValues()
 }*/
 
 constexpr const static uint32_t FPS_CAP = 60;
-constexpr const static float FRAME_LENGTH = 1.0f / static_cast<float>(FPS_CAP);
+constexpr const static double FRAME_LENGTH = 1.0 / static_cast<double>(FPS_CAP);
+
+constexpr const static double G = 132.67;
 
 int main(int argc, char **argv)
 {
@@ -281,34 +284,61 @@ int main(int argc, char **argv)
 
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glEnable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     Camera camera;
     camera.fov = M_PI_2;
 
     Player player;
-    player.position = { 0.0f, 0.0f, 3.0f };
+    player.position = { -1.496e5f, 0.0f, 0.0f };
     player.pitch = 0.0f;
     player.yaw = 0.0f;
 
-    player.run_speed = 2.0f;
-    player.sprint_speed = 3.0f;
-    player.elevate_speed = 2.0f;
+    player.run_speed = 2e4f;
+    player.sprint_speed = 5e4f;
+    player.elevate_speed = 3e4f;
 
     player.sensitivity = 0.001f;
 
     camera.TakeControl(&player);
 
-    ShaderProgram tri_shader;
-    tri_shader.AttachShader(Shader::Load(ShaderType::VERTEX, "assets/shaders/tri.vert"));
-    tri_shader.AttachShader(Shader::Load(ShaderType::GEOMETRY, "assets/shaders/tri.geom"));
-    tri_shader.AttachShader(Shader::Load(ShaderType::FRAGMENT, "assets/shaders/tri.frag"));
-    tri_shader.Make();
+    ShaderProgram planet_shader;
+    planet_shader.AttachShader(Shader::Load(ShaderType::VERTEX, "assets/shaders/planet.vert"));
+    planet_shader.AttachShader(Shader::Load(ShaderType::FRAGMENT, "assets/shaders/planet.frag"));
+    planet_shader.Make();
 
-    tri_shader.DeclareUniform("model");
-    tri_shader.DeclareUniform("view");
-    tri_shader.DeclareUniform("projection");
+    planet_shader.DeclareUniform("model");
+    planet_shader.DeclareUniform("view");
+    planet_shader.DeclareUniform("projection");
+    planet_shader.DeclareUniform("sunPosition");
 
-    PlanetModel planet_model(1);
+    ShaderProgram sun_shader;
+    sun_shader.AttachShader(Shader::Load(ShaderType::VERTEX, "assets/shaders/sun.vert"));
+    sun_shader.AttachShader(Shader::Load(ShaderType::FRAGMENT, "assets/shaders/sun.frag"));
+    sun_shader.Make();
+
+    sun_shader.DeclareUniform("model");
+    sun_shader.DeclareUniform("view");
+    sun_shader.DeclareUniform("projection");
+    sun_shader.DeclareUniform("color");
+    sun_shader.DeclareUniform("radius");
+    sun_shader.DeclareUniform("glow_width");
+
+    // Reduce error for large values by scaling
+    float space_scale = 1e6; // Scale by 1000km
+    float mass_scale = 1.989e30; // Scale to solar mass
+
+    IcoModel planet_model(2);
+    Body planet_body({ -1.496e5, 0.0, 0.0 }, { 0.0, 0.0, 3e-2 }, 3e-6, planet_model, planet_shader);
+    planet_body.GetModel().SetScale(glm::vec3(637.1f));
+    player.position = glm::vec3(planet_body.GetPosition());
+
+    IcoModel sun_model(3);
+    Body sun_body({ 0.0, 0.0, 0.0 }, { 0.0, 0.0, 0.0 }, 1.0, sun_model, sun_shader);
+    sun_body.GetModel().SetScale(glm::vec3(698.3f));
+
+    std::vector<Body*> bodies = { &planet_body, &sun_body }; 
 
     // Start loop
     window.GetCursor()->Disable();
@@ -317,9 +347,10 @@ int main(int argc, char **argv)
     while (!window.ShouldClose())
     {
         std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
-        float dt = std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count();
+        double dt_d = std::chrono::duration_cast<std::chrono::duration<double>>(t2 - t1).count();
+        float dt_f = static_cast<float>(dt_d);
 
-        if (dt > FRAME_LENGTH)
+        if (dt_d > FRAME_LENGTH)
         {
             t1 = t2;
 
@@ -327,21 +358,46 @@ int main(int argc, char **argv)
 
             if (window.GetKeyboard()->KeyPressed(GLFW_KEY_ESCAPE)) break;
 
-            camera.Update(window, dt);
+            // Update
+            camera.Update(window, dt_f);
 
+            // Physics
+            for (Body *body : bodies)
+            {
+                body->Update(dt_d * 3600 * 24 * 10);
+            }
+
+            for (Body *b1 : bodies)
+            for (Body *b2 : bodies)
+            {
+                if (b1 == b2) continue;
+
+                glm::dvec3 diff = b2->GetPosition() - b1->GetPosition();
+                double Fg = G * (b1->GetMass() * b2->GetMass()) / glm::dot(diff, diff);
+                b1->ApplyForce(Fg * glm::normalize(diff));
+            }
+
+            // Render
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
             glm::mat4 projection = camera.GetProjectionMatrix();
             glm::mat4 view = camera.GetViewMatrix();
-            glm::mat4 model = glm::mat4(1.0f);
 
-            tri_shader.Bind();
-            tri_shader.SetUniform("projection", projection);
-            tri_shader.SetUniform("view", view);
-            tri_shader.SetUniform("model", model);
+            planet_shader.Bind();
+            planet_shader.SetUniform("projection", projection);
+            planet_shader.SetUniform("view", view);
+            planet_shader.SetUniform("sunPosition", glm::vec3(sun_body.GetPosition()));
 
-            planet_model.Bind();
-            planet_model.Render();
+            planet_body.Render();
+
+            sun_shader.Bind();
+            sun_shader.SetUniform("projection", projection);
+            sun_shader.SetUniform("view", view);
+
+            sun_shader.SetUniform("color", { 250.0f / 255.0f, 212.0f / 255.0f, 64.0f / 255.0f });
+            sun_shader.SetUniform("radius", 1.0f);
+            sun_shader.SetUniform("glow_width", 0.2f);
+            sun_body.Render();
         }
     }
 }

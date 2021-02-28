@@ -4,6 +4,12 @@
 
 #include<gtc/matrix_transform.hpp>
 
+Camera::Camera():
+    m_view_matrix(1.0f),
+    m_projection_matrix(1.0f),
+    m_current_controller(nullptr)
+{}
+
 void Camera::MoveForward(float step)
 {
     position.x += std::sin(yaw) * step;
@@ -57,7 +63,7 @@ void Camera::Update(Window &window, float dt)
     m_view_matrix = glm::rotate(m_view_matrix, yaw, { 0.0f, 1.0f, 0.0f });
     m_view_matrix = glm::translate(m_view_matrix, -position);
 
-    m_projection_matrix = glm::perspective(fov, window.GetAspectRatio(), 0.01f, 1000.0f);
+    m_projection_matrix = glm::infinitePerspective(fov, window.GetAspectRatio(), 0.01f);
 }
 
 glm::mat4 Camera::GetProjectionMatrix() { return m_projection_matrix; }

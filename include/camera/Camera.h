@@ -14,6 +14,8 @@ public:
 
     float fov;
 
+    Camera();
+
     void MoveForward(float step);
     void MoveBackward(float step);
     void MoveLeft(float step);

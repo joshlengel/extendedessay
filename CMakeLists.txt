@@ -18,9 +18,12 @@ set(EXECUTABLE_OUTPUT_PATH "${EE_BIN}")
 set(sources
     "Main.cpp"
     "Utils.cpp"
+    "body/Body.cpp"
+    "body/Solver.cpp"
     "camera/Camera.cpp"
     "camera/CameraController.cpp"
-    "mesh/Planet.cpp"
+    "mesh/Mesh.cpp"
+    "mesh/MeshModel.cpp"
     "render/Model.cpp"
     "render/Shader.cpp"
     "window/Window.cpp")
