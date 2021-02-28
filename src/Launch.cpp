@@ -1,6 +1,5 @@
 #include"Launch.h"
 
-#include"Sim.h"
 #include"Constants.h"
 #include"Utils.h"
 

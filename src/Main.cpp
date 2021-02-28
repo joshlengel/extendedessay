@@ -1,15 +1,14 @@
-#include"Sim.h"
-#include"Launch.h"
-#include"Constants.h"
+#include"window/Window.h"
+#include"render/Model.h"
+#include"render/Shader.h"
+#include"camera/Camera.h"
+#include"camera/CameraController.h"
+#include"mesh/Planet.h"
 
-#include<vector>
-#include<fstream>
 #include<iostream>
-#include<iomanip>
-
-#include<random>
 #include<chrono>
 
+/*
 SolarSystem solar_system("/home/joshlengel/Dev/C++/ExtendedEssay/assets/solar_system.tm");
 std::string launch_window_start = "2020 Jan 1 00:00:00.00";
 
@@ -262,15 +261,87 @@ void AdjustLaunchValues()
     WritePositions("python/graph-earth.json", ebx, eby, ebz);
     WritePositions("python/graph-mars.json", mbx, mby, mbz);
     WritePositions("python/graph-rocket.json", rbx, rby, rbz);
-}
+}*/
+
+constexpr const static uint32_t FPS_CAP = 60;
+constexpr const static float FRAME_LENGTH = 1.0f / static_cast<float>(FPS_CAP);
 
 int main(int argc, char **argv)
 {
+    /*
     // -----------------------------------------
 
     // GetLaunchWindowAndPorkchop();
 
     // -----------------------------------------
 
-    AdjustLaunchValues();
+    AdjustLaunchValues();*/
+    Window window("Extended Essay");
+    window.Show();
+
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glEnable(GL_DEPTH_TEST);
+
+    Camera camera;
+    camera.fov = M_PI_2;
+
+    Player player;
+    player.position = { 0.0f, 0.0f, 3.0f };
+    player.pitch = 0.0f;
+    player.yaw = 0.0f;
+
+    player.run_speed = 2.0f;
+    player.sprint_speed = 3.0f;
+    player.elevate_speed = 2.0f;
+
+    player.sensitivity = 0.001f;
+
+    camera.TakeControl(&player);
+
+    ShaderProgram tri_shader;
+    tri_shader.AttachShader(Shader::Load(ShaderType::VERTEX, "assets/shaders/tri.vert"));
+    tri_shader.AttachShader(Shader::Load(ShaderType::GEOMETRY, "assets/shaders/tri.geom"));
+    tri_shader.AttachShader(Shader::Load(ShaderType::FRAGMENT, "assets/shaders/tri.frag"));
+    tri_shader.Make();
+
+    tri_shader.DeclareUniform("model");
+    tri_shader.DeclareUniform("view");
+    tri_shader.DeclareUniform("projection");
+
+    PlanetModel planet_model(1);
+
+    // Start loop
+    window.GetCursor()->Disable();
+    std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
+
+    while (!window.ShouldClose())
+    {
+        std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
+        float dt = std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count();
+
+        if (dt > FRAME_LENGTH)
+        {
+            t1 = t2;
+
+            window.Update();
+
+            if (window.GetKeyboard()->KeyPressed(GLFW_KEY_ESCAPE)) break;
+
+            camera.Update(window, dt);
+
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+            glm::mat4 projection = camera.GetProjectionMatrix();
+            glm::mat4 view = camera.GetViewMatrix();
+            glm::mat4 model = glm::mat4(1.0f);
+
+            tri_shader.Bind();
+            tri_shader.SetUniform("projection", projection);
+            tri_shader.SetUniform("view", view);
+            tri_shader.SetUniform("model", model);
+
+            planet_model.Bind();
+            planet_model.Render();
+        }
+    }
 }

@@ -4,40 +4,6 @@
 #include<vector>
 #include<string>
 
-// Simple struct for representing 3D linear algebra calculations
-struct Vec
-{
-    double x, y, z;
-
-    Vec();
-    Vec(double x, double y, double z);
-    Vec(const Vec &v);
-
-    Vec &operator=(const Vec &v);
-
-    Vec operator+(const Vec &v) const;
-    Vec operator-(const Vec &v) const;
-    Vec operator*(double s) const;
-    Vec operator-() const;
-
-    // Dividing once and multiplying three times by the inverse is more efficient than dividing three times
-    Vec operator/(double s) const;
-
-    double LengthSquared() const;
-
-    // Length operation (and consequently "Normalized") should be avoided due to costly sqrt function 
-    double Length() const;
-    Vec Normalized() const;
-
-    static double Dot(const Vec &v1, const Vec &v2);
-    static Vec Cross(const Vec &v1, const Vec &v2);
-    static Vec Rotate(const Vec &v, const Vec &axis, double angle);
-};
-
-// Useful for outputting debug info
-
-std::ostream &operator<<(std::ostream &os, const Vec &v);
-
 // Struct representing a time (Mainly used for conversions)
 struct Time
 {
@@ -76,4 +42,5 @@ private:
     double m_seconds;
 };
 
+// Used for generating plots in Jupyter Lab
 void WritePositions(const std::string &file_name, const std::vector<double> &x, const std::vector<double> &y, const std::vector<double> &z);

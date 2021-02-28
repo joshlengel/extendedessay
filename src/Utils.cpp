@@ -6,56 +6,6 @@
 
 #include<SpiceUsr.h>
 
-// -------------------------- Vec -----------------------------
-Vec::Vec():
-    x(0.0), y(0.0), z(0.0) {}
-
-Vec::Vec(double x, double y, double z):
-    x(x), y(y), z(z) {}
-
-Vec::Vec(const Vec &v):
-    x(v.x), y(v.y), z(v.z) {}
-
-Vec &Vec::operator=(const Vec &v) { x=v.x; y=v.y; z=v.z; return *this; }
-
-Vec Vec::operator+(const Vec &v) const { return { x+v.x, y+v.y, z+v.z }; }
-Vec Vec::operator-(const Vec &v) const { return { x-v.x, y-v.y, z-v.z }; }
-Vec Vec::operator*(double s)     const { return {   x*s,   y*s,   z*s }; }
-Vec Vec::operator-()             const { return {    -x,    -y,    -z }; }
-
-// Dividing once and multiplying three times by the inverse is more efficient than dividing three times
-Vec Vec::operator/(double s) const { double inv_s = 1.0 / s; return { x*inv_s, y*inv_s, z*inv_s }; }
-
-double Vec::LengthSquared() const { return x*x + y*y + z*z; }
-
-double Vec::Length() const { return sqrt(x*x + y*y + z*z); }
-Vec Vec::Normalized() const { return *this / Length(); }
-
-double Vec::Dot(const Vec &v1, const Vec &v2) { return v1.x*v2.x + v1.y*v2.y + v1.z*v2.z; }
-Vec Vec::Cross(const Vec &v1, const Vec &v2) { return { v1.y * v2.z - v1.z * v2.y, v1.z * v2.x - v1.x * v2.z, v1.x * v2.y - v1.y * v2.x }; }
-
-Vec Vec::Rotate(const Vec &v, const Vec &axis, double angle)
-{
-    double sa = sin(angle);
-    double ca = cos(angle);
-
-    double mat[9] =
-    {
-        ca + axis.x * axis.x * (1.0f - ca), axis.x * axis.y * (1.0f - ca) - axis.z * sa, axis.x * axis.z * (1.0f - ca) + axis.y * sa,
-        axis.y * axis.x * (1.0f - ca) + axis.z * sa, ca + axis.y * axis.y * (1.0f - ca), axis.y * axis.z * (1.0f - ca) - axis.x * sa,
-        axis.z * axis.x * (1.0f - ca) - axis.y * sa, axis.z * axis.y * (1.0f - ca) + axis.x * sa, ca + axis.z * axis.z * (1.0f - ca)
-    };
-
-    return
-    {
-        v.x * mat[0] + v.y * mat[1] + v.z * mat[2],
-        v.x * mat[3] + v.y * mat[4] + v.z * mat[5],
-        v.x * mat[6] + v.y * mat[7] + v.z * mat[8],
-    };
-}
-
-std::ostream &operator<<(std::ostream &os, const Vec &v) { return os << '(' << v.x << ", " << v.y << ", " << v.z << ')'; }
-
 // ------------------------- Time ----------------------------
 Time::Time(): m_seconds(0.0) {}
 Time::Time(double seconds): m_seconds(seconds) {}

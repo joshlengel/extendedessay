@@ -1,7 +1,5 @@
 #pragma once
 
-#include"Sim.h"
-
 struct LaunchData
 {
     // Independent variables
