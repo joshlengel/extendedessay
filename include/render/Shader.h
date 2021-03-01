@@ -45,13 +45,13 @@ public:
     void DeclareUniform(std::string &&name);
     void Make();
 
-    void Bind();
-    void SetUniform(const std::string &name, float f);
-    void SetUniform(const std::string &name, glm::vec2 v);
-    void SetUniform(const std::string &name, glm::vec3 v);
-    void SetUniform(const std::string &name, glm::vec4 v);
-    void SetUniform(const std::string &name, glm::mat3 m);
-    void SetUniform(const std::string &name, glm::mat4 m);
+    void Bind() const;
+    void SetUniform(const std::string &name, float f) const;
+    void SetUniform(const std::string &name, glm::vec2 v) const;
+    void SetUniform(const std::string &name, glm::vec3 v) const;
+    void SetUniform(const std::string &name, glm::vec4 v) const;
+    void SetUniform(const std::string &name, glm::mat3 m) const;
+    void SetUniform(const std::string &name, glm::mat4 m) const;
 
 private:
     GLuint m_id;

@@ -4,6 +4,10 @@
 #include<vector>
 #include<string>
 
+constexpr const static double DIST_SCALE = 1e6;
+constexpr const static double MASS_SCALE = 1.989e30;
+constexpr const static double G = 6.67e-11 * MASS_SCALE / DIST_SCALE / DIST_SCALE / DIST_SCALE;
+
 // Struct representing a time (Mainly used for conversions)
 struct Time
 {

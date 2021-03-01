@@ -24,3 +24,9 @@ class EulerSolver : public virtual Solver
 public:
     virtual void Step(double dt, PhysicalState &state) override;
 };
+
+class NoSolver : public virtual Solver
+{
+public:
+    virtual void Step(double dt, PhysicalState &state) override;
+};

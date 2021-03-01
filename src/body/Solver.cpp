@@ -9,3 +9,6 @@ void EulerSolver::Step(double dt, PhysicalState &state)
     state.momentum += delta_p;
     state.position += delta_s;
 }
+
+void NoSolver::Step(double dt, PhysicalState &state)
+{}

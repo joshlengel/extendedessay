@@ -19,6 +19,7 @@ set(sources
     "Main.cpp"
     "Utils.cpp"
     "body/Body.cpp"
+    "body/SolarSystem.cpp"
     "body/Solver.cpp"
     "camera/Camera.cpp"
     "camera/CameraController.cpp"
@@ -26,6 +27,7 @@ set(sources
     "mesh/MeshModel.cpp"
     "render/Model.cpp"
     "render/Shader.cpp"
+    "stars/StarMap.cpp"
     "window/Window.cpp")
 
 list(TRANSFORM sources PREPEND "${EE_SRC}/")

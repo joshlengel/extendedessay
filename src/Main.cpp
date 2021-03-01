@@ -1,13 +1,13 @@
 #include"window/Window.h"
-#include"render/Model.h"
-#include"render/Shader.h"
-#include"body/Body.h"
 #include"camera/Camera.h"
 #include"camera/CameraController.h"
-#include"mesh/MeshModel.h"
+#include"body/SolarSystem.h"
+#include"stars/StarMap.h"
 
 #include<iostream>
 #include<chrono>
+
+#include<SpiceUsr.h>
 
 /*
 SolarSystem solar_system("/home/joshlengel/Dev/C++/ExtendedEssay/assets/solar_system.tm");
@@ -267,8 +267,6 @@ void AdjustLaunchValues()
 constexpr const static uint32_t FPS_CAP = 60;
 constexpr const static double FRAME_LENGTH = 1.0 / static_cast<double>(FPS_CAP);
 
-constexpr const static double G = 132.67;
-
 int main(int argc, char **argv)
 {
     /*
@@ -291,54 +289,33 @@ int main(int argc, char **argv)
     camera.fov = M_PI_2;
 
     Player player;
-    player.position = { -1.496e5f, 0.0f, 0.0f };
     player.pitch = 0.0f;
     player.yaw = 0.0f;
 
-    player.run_speed = 2e4f;
-    player.sprint_speed = 5e4f;
-    player.elevate_speed = 3e4f;
+    player.run_speed = 2e2f;
+    player.sprint_speed = 5e2f;
+    player.elevate_speed = 3e2f;
 
     player.sensitivity = 0.001f;
 
     camera.TakeControl(&player);
 
-    ShaderProgram planet_shader;
-    planet_shader.AttachShader(Shader::Load(ShaderType::VERTEX, "assets/shaders/planet.vert"));
-    planet_shader.AttachShader(Shader::Load(ShaderType::FRAGMENT, "assets/shaders/planet.frag"));
-    planet_shader.Make();
+    furnsh_c("assets/naif0012.tls"); // Leapseconds kernel for Time::FromStr use
+    SolarSystem solar_system(Time::FromStr("2020 Jan 1 00:00:00.00"), camera);
 
-    planet_shader.DeclareUniform("model");
-    planet_shader.DeclareUniform("view");
-    planet_shader.DeclareUniform("projection");
-    planet_shader.DeclareUniform("sunPosition");
+    player.position = solar_system.GetMars().GetPosition();
 
-    ShaderProgram sun_shader;
-    sun_shader.AttachShader(Shader::Load(ShaderType::VERTEX, "assets/shaders/sun.vert"));
-    sun_shader.AttachShader(Shader::Load(ShaderType::FRAGMENT, "assets/shaders/sun.frag"));
-    sun_shader.Make();
+    // Star map
+    StarMap star_map(1000, 1e7, 2e4, 1e-8f);
 
-    sun_shader.DeclareUniform("model");
-    sun_shader.DeclareUniform("view");
-    sun_shader.DeclareUniform("projection");
-    sun_shader.DeclareUniform("color");
-    sun_shader.DeclareUniform("radius");
-    sun_shader.DeclareUniform("glow_width");
+    ShaderProgram star_shader;
+    star_shader.AttachShader(Shader::Load(ShaderType::VERTEX, "assets/shaders/star.vert"));
+    star_shader.AttachShader(Shader::Load(ShaderType::FRAGMENT, "assets/shaders/star.frag"));
+    star_shader.Make();
 
-    // Reduce error for large values by scaling
-    float space_scale = 1e6; // Scale by 1000km
-    float mass_scale = 1.989e30; // Scale to solar mass
-
-    IcoModel planet_model(2);
-    Body planet_body({ -1.496e5, 0.0, 0.0 }, { 0.0, 0.0, 3e-2 }, 3e-6, planet_model, planet_shader);
-    planet_body.GetModel().SetScale(glm::vec3(637.1f));
-    player.position = glm::vec3(planet_body.GetPosition());
-
-    IcoModel sun_model(3);
-    Body sun_body({ 0.0, 0.0, 0.0 }, { 0.0, 0.0, 0.0 }, 1.0, sun_model, sun_shader);
-    sun_body.GetModel().SetScale(glm::vec3(698.3f));
-
-    std::vector<Body*> bodies = { &planet_body, &sun_body }; 
+    star_shader.DeclareUniform("view");
+    star_shader.DeclareUniform("projection");
+    star_shader.DeclareUniform("color");
 
     // Start loop
     window.GetCursor()->Disable();
@@ -360,44 +337,22 @@ int main(int argc, char **argv)
 
             // Update
             camera.Update(window, dt_f);
-
-            // Physics
-            for (Body *body : bodies)
-            {
-                body->Update(dt_d * 3600 * 24 * 10);
-            }
-
-            for (Body *b1 : bodies)
-            for (Body *b2 : bodies)
-            {
-                if (b1 == b2) continue;
-
-                glm::dvec3 diff = b2->GetPosition() - b1->GetPosition();
-                double Fg = G * (b1->GetMass() * b2->GetMass()) / glm::dot(diff, diff);
-                b1->ApplyForce(Fg * glm::normalize(diff));
-            }
+            solar_system.Update(dt_d);
 
             // Render
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-            glm::mat4 projection = camera.GetProjectionMatrix();
-            glm::mat4 view = camera.GetViewMatrix();
+            glDisable(GL_DEPTH_TEST);
+            star_shader.Bind();
+            star_shader.SetUniform("view", camera.GetViewMatrix());
+            star_shader.SetUniform("projection", camera.GetProjectionMatrix());
+            star_shader.SetUniform("color", glm::vec3(1.0f, 1.0f, 1.0f));
+            star_map.Render();
 
-            planet_shader.Bind();
-            planet_shader.SetUniform("projection", projection);
-            planet_shader.SetUniform("view", view);
-            planet_shader.SetUniform("sunPosition", glm::vec3(sun_body.GetPosition()));
-
-            planet_body.Render();
-
-            sun_shader.Bind();
-            sun_shader.SetUniform("projection", projection);
-            sun_shader.SetUniform("view", view);
-
-            sun_shader.SetUniform("color", { 250.0f / 255.0f, 212.0f / 255.0f, 64.0f / 255.0f });
-            sun_shader.SetUniform("radius", 1.0f);
-            sun_shader.SetUniform("glow_width", 0.2f);
-            sun_body.Render();
+            glEnable(GL_DEPTH_TEST);
+            solar_system.Render();
         }
     }
+
+    unload_c("assets/naif0012.tls"); 
 }
